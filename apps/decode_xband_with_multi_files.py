@@ -124,7 +124,7 @@ def reassemble_packet_group(packet_group):
     return reassembled_data, missing_seq, extension
     
 
-def save_packet_group_file(data,file_uid, extension, output_dir='./X_band_decoded'):
+def save_packet_group_file(data,file_uid, extension, output_dir='./output/X_band_decoded'):
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     file_created_time = datetime.datetime.fromtimestamp(int(file_uid,16)).strftime("%Y%m%d%H%M%S")
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     # target_files = glob.glob('x_band_test_data/x_band_test_data/four_images_F20250515170302.bin')
     # target_files = glob.glob('x_band_test_data/part*.bin')
   
-    files = glob.glob("devide_bin/*.bin")
+    files = glob.glob("data/x_devided_bin/*.bin")
     target_files = [f for f in files if "packet_base" not in f]
 
     # target_files = glob.glob("devide_bin/*packet_base*.bin")
