@@ -38,7 +38,6 @@ def process_packet(raw_packet):
     seq = int.from_bytes(transmitter_packet[2:5], 'big')
     mdpu_header = transmitter_packet[6:28]
     payload = transmitter_packet[28:28+C.PAYLOAD_SIZE]
-    print(len(transmitter_packet))
 
     ptype = mdpu_header[21]
     # Interpret the MDPU header field as the total number of packets for the file.
@@ -112,3 +111,16 @@ def get_ranges(nums):
 
     ranges.append((start, prev, numbers))
     return ranges
+
+def extension_from_ptype(ptype):
+    if ptype == 0x03:
+        extension = 'txt'
+    elif ptype == 0x04:
+        extension = 'log'
+    elif ptype == 0x01:
+        extension = 'csv'
+    elif ptype == 0x05:
+        extension = 'jpg'
+    else:
+        extension = 'bin'
+    return extension
