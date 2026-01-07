@@ -35,11 +35,11 @@ def move_files(file_paths):
 def initialize_loss_report_file():
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     os.makedirs('output/report',exist_ok=True)
-    path_w = f'output/report/{timestamp}.csv'
-    with open(path_w, mode='w') as f:
+    report_path = f'output/report/{timestamp}.csv'
+    with open(report_path, mode='w') as f:
         writer = csv.writer(f)
         writer.writerow(["ID","extension","start","end","number"])
-    return path_w
+    return report_path
 
 def save_loss_packet_group(packet_loss_group,):
     os.makedirs('data/loss_packet_group',exist_ok=True)
@@ -47,8 +47,7 @@ def save_loss_packet_group(packet_loss_group,):
         pickle.dump(packet_loss_group, f)
     return
 
-def loa__loss_packet_group():
-
+def load_loss_packet_group():
     path = 'data/loss_packet_group/loss_packet_group.pkl'
     if not os.path.exists(path):
         return {}
@@ -78,48 +77,48 @@ def extension_from_ptype(ptype):
         extension = 'bin'
     return extension
 
-def main(file_paths):
+def write_loss_report(report_path, file_uid, extension, loss_sequence):
+    ranges = decode_utils.get_ranges(loss_sequence)
+    with open(report_path, mode='a') as f:
+        writer = csv.writer(f)
+        for rng in ranges:
+            writer.writerow([file_uid,extension]+list(rng))
 
-    packet_groups = loa__loss_packet_group()
-    # packet_group =  read_packet_group()
+def decode_all_files(file_paths,packet_groups):
     for target_file in file_paths:
         print(f"Decoding file: {target_file}")
         packet_groups = decode_utils.decode_packets(target_file, packet_groups)
+    return packet_groups
 
+def diagnose_loss(packet_groups):
+    report_path = initialize_loss_report_file()
     packet_loss_group = {} 
-    path_w = initialize_loss_report_file()
 
     for file_uid, packet_group in packet_groups.items():
-
         payloads = packet_group['payloads']
         ptype = packet_group['ptypes'][0]
         extension = extension_from_ptype(ptype)
-
         print(f'file_uid is {file_uid}')
         loss_sequence = []
         for i, packet in enumerate(payloads):
-
             if packet == bytes([0xEE])*CONST.PAYLOAD_SIZE:
                 print(f'find packet loss @ {i}')
                 loss_sequence.append(i)
         if not loss_sequence:
-            reassembled_data = reassemble_payload(packet_group, extension)
+            reassembled_data = reassemble_payload(payloads, extension)
             save_packet_group_file(reassembled_data, file_uid, extension)
         else:
             print(f'loss packet found {file_uid}')
-            ranges = decode_utils.get_ranges(loss_sequence)
-            with open(path_w, mode='a') as f:
-                writer = csv.writer(f)
-                for rng in ranges:
-                    writer.writerow([file_uid,extension]+list(rng))
+            write_loss_report(report_path, file_uid, extension, loss_sequence)
             packet_loss_group[file_uid] = packet_group
-    #         print(packet_loss_group)
-    # print(packet_loss_group)
-    save_loss_packet_group(packet_loss_group)
+    return packet_loss_group
 
-    move_files(file_paths)
-
-    return 
+def main(file_paths):
+    packet_groups = load_loss_packet_group()
+    decoded_groups = decode_all_files(file_paths, packet_groups)
+    loss_groups = diagnose_loss(decoded_groups)
+    save_loss_packet_group(loss_groups)
+    # move_files(file_paths)
 
 
 
