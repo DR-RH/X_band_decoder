@@ -30,12 +30,16 @@ def process_packet(raw_packet):
     # Validate VCDU header (first 2 bytes)
     vcdu = transmitter_packet[0:2]
     if vcdu != b'\x55\x40':
-        return None
 
+        return None
+    if len(transmitter_packet) != 1115:
+        return None
     # Sequence number: bytes 2-4 (3 bytes)
     seq = int.from_bytes(transmitter_packet[2:5], 'big')
     mdpu_header = transmitter_packet[6:28]
     payload = transmitter_packet[28:28+C.PAYLOAD_SIZE]
+    print(len(transmitter_packet))
+
     ptype = mdpu_header[21]
     # Interpret the MDPU header field as the total number of packets for the file.
     actual_file_length = int.from_bytes(mdpu_header[17:21], 'big')
@@ -73,13 +77,13 @@ def decode_packets(target_file, packet_groups):
             dest = mdpu_header[2:9].split(b'\x00')[0].decode('ascii', errors='replace')
             # packet_groups[file_uid] = {'packets':{"payload":[b'FF'] * total_packet_size,'ptype':ptype}, 'total_packet_size': total_packet_size, 'dest_callsign': dest}
             packet_groups[file_uid] = {
-                'packets': [bytes([0xEE]) * C.PAYLOAD_SIZE for _ in range(total_packet_size)],
+                'payloads': [bytes([0xEE]) * C.PAYLOAD_SIZE for _ in range(total_packet_size)],
                 'ptypes': [None] * total_packet_size,
                 'total_packet_size': total_packet_size,
                 'dest_callsign': dest
             }
 
-        packet_groups[file_uid]['packets'][seq] = payload
+        packet_groups[file_uid]['payloads'][seq] = payload
         packet_groups[file_uid]['ptypes'][seq] = ptype
     return packet_groups
 
