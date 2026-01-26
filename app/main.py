@@ -2,25 +2,22 @@ import glob
 from app import decode_controller, loss_diagnosis
 from common import file_io
 
+"""
+保守のためのテストコードを書く。
+loggingを用いる
+"""
+
 def main(file_paths):
     # 1. 既存の損失データ読込
     packet_groups = file_io.load_loss_packet_group()
-
+    # print(packet_groups)
     # 2. デコード
     decoded_packet_groups = decode_controller.decode_all_files(file_paths, packet_groups)
 
-    # 3. ロス解析（純粋ロジック）
+    # 3. ロス解析 & 保存
     loss_diagnosis.packet_loss_diagnosis(decoded_packet_groups)
 
-    # 4. ロスなし → 完成系保存
-    # file_io.save_packet_group_file(diagnosis_results.completed)
-
-    # # 5. ロスあり → レポート保存
-    # file_io.write_loss_report(diagnosis_results.lost)
-
-    # # 6. ロスありグループだけを保存
-    # file_io.save_loss_packet_group(diagnosis_results.lost_groups)
-    # 5. 後処理（例: 移動）
+    # 4. 後処理（例: 移動）
     # move_files(file_paths)
 
 if __name__ == "__main__": 

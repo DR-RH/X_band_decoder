@@ -26,20 +26,21 @@ def process_packet(raw_packet):
     transmitter_packet = trimmed[:-C.OPT_EXTRA_TRAILER]
     if len(transmitter_packet) < C.TX_HEADER_SIZE:
         return None
-
     # Validate VCDU header (first 2 bytes)
     vcdu = transmitter_packet[0:2]
     if vcdu != b'\x55\x40':
-
         return None
     if len(transmitter_packet) != 1115:
         return None
+    
     # Sequence number: bytes 2-4 (3 bytes)
     seq = int.from_bytes(transmitter_packet[2:5], 'big')
     mdpu_header = transmitter_packet[6:28]
     payload = transmitter_packet[28:28+C.PAYLOAD_SIZE]
 
     ptype = mdpu_header[21]
+    if ptype >5:
+        return None
     # Interpret the MDPU header field as the total number of packets for the file.
     actual_file_length = int.from_bytes(mdpu_header[17:21], 'big')
     # Unique identifier: bytes 9–12 (first 4 bytes of the unique info) as an 8-digit hex string.
@@ -61,17 +62,25 @@ def decode_packets(target_file, packet_groups):
     packet_chunks = raw_data.split(C.SYNC_MARKER)[1:]
     if not packet_chunks:
         raise ValueError("No packets found in received file.")
-    
+    print("chunk length")
+    print(len(packet_chunks))
     # packet_groups = {}   # key: file_uid, value: dictionary with keys: 'packets', 'total_packet_size', 'dest_callsign'
+    j = 0
     for chunk in tqdm(packet_chunks, desc="Processing packets"):
+        j += 1
         result = process_packet(chunk)
         if result is None:
             continue
         seq, ptype, total_packet_size, payload, file_uid, mdpu_header = result
         if ptype == 0x00:
             total_packet_size = 16621
+        # print(f'test {j}')
+        # print(packet_groups.keys())
+        if file_uid not in packet_groups.keys():
+            print(f'{file_uid}')
+            print(f'test in fileud')
+            print(f'{seq, ptype, total_packet_size, file_uid, mdpu_header }')
 
-        if file_uid not in packet_groups:
             # Extract destination callsign from bytes 2-8 (null terminated)
             dest = mdpu_header[2:9].split(b'\x00')[0].decode('ascii', errors='replace')
             # packet_groups[file_uid] = {'packets':{"payload":[b'FF'] * total_packet_size,'ptype':ptype}, 'total_packet_size': total_packet_size, 'dest_callsign': dest}
