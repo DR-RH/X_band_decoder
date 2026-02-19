@@ -1,5 +1,5 @@
 import glob
-from app import decode_controller, loss_diagnosis
+from app import decode_controller, loss_diagnosis,  move_files
 from common import file_io
 
 """
@@ -18,7 +18,7 @@ def main(file_paths):
     loss_diagnosis.packet_loss_diagnosis(decoded_packet_groups)
 
     # 4. 後処理（例: 移動）
-    # move_files(file_paths)
+    move_files.move_files(file_paths)
 
 if __name__ == "__main__": 
     file_paths = glob.glob("data/raw_data_unprocessed/*.bin")
@@ -52,13 +52,6 @@ if __name__ == "__main__":
 #     return filename
 #     return
 
-# def move_files(file_paths):
-#     print(f"move files {file_paths}" )
-#     for file in file_paths:
-#         filename = file.split('/')[-1]
-#         dst_filename = f'data/raw_data_processed/{filename}'
-#         shutil.move(file, dst_filename)
-#     return
 
 # # def initialize_loss_report_file():
 # #     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")

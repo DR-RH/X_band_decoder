@@ -22,6 +22,11 @@ def process_packet(raw_packet):
       (seq, ptype, actual_file_length, payload, file_uid, mdpu_header)
     where file_uid is the unique identifier as an 8-digit hex string.
     """
+    reed_solomon_recovory_symbol = raw_packet[:2]
+    recovery_number = reed_solomon_recovory_symbol[:1]
+    recovery_status = reed_solomon_recovory_symbol[1:2]
+    if recovery_status != b'\x00':
+        return
     trimmed = raw_packet[C.OPT_EXTRA_HEADER:]
     transmitter_packet = trimmed[:-C.OPT_EXTRA_TRAILER]
     if len(transmitter_packet) < C.TX_HEADER_SIZE:
@@ -39,8 +44,7 @@ def process_packet(raw_packet):
     payload = transmitter_packet[28:28+C.PAYLOAD_SIZE]
 
     ptype = mdpu_header[21]
-    if ptype >5:
-        return None
+
     # Interpret the MDPU header field as the total number of packets for the file.
     actual_file_length = int.from_bytes(mdpu_header[17:21], 'big')
     # Unique identifier: bytes 9–12 (first 4 bytes of the unique info) as an 8-digit hex string.
