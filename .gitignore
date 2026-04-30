@@ -1,6 +1,5 @@
 arch/
-data/
-# !data/loss_packet_group
-!data/loss_packet_group/.gitkeep
+data/**
+!data/**/
 output/
 .venv/
