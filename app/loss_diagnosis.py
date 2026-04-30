@@ -27,8 +27,7 @@ def packet_loss_diagnosis(packet_groups):
     report_path = _create_loss_report_file()
     loss_packet_groups = {} 
     for file_uid, packet_group in packet_groups.items():
-        print(file_uid)
-        print("file_uid")
+        print(f"missing file_uid {file_uid}")
         extension = _extract_extension(packet_group)
         loss_sequence = analyze_packet_loss(packet_group)
 
@@ -62,6 +61,7 @@ def _handle_complete_case(file_uid, extension, packet_group):
     payloads = packet_group["payloads"]
     reassembled_data = reassemble_payload(payloads, extension)
     file_io.save_packet_group_file(reassembled_data, file_uid, extension)
+    print(f"save {file_uid}")
 
 
 # -----------------------------

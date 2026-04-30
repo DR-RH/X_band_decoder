@@ -1,7 +1,7 @@
 import common.constants as C
 from tqdm import tqdm
 
-def process_packet(raw_packet):
+def process_packet(raw_packet,config):
     """
     Process a single raw optical packet (one chunk from splitting by the sync marker).
 
@@ -23,25 +23,33 @@ def process_packet(raw_packet):
     where file_uid is the unique identifier as an 8-digit hex string.
     """
     reed_solomon_recovory_symbol = raw_packet[:2]
-    recovery_number = reed_solomon_recovory_symbol[:1]
-    recovery_status = reed_solomon_recovory_symbol[1:2]
-    if recovery_status != b'\x00':
-        return
-    trimmed = raw_packet[C.OPT_EXTRA_HEADER:]
-    transmitter_packet = trimmed[:-C.OPT_EXTRA_TRAILER]
-    if len(transmitter_packet) < C.TX_HEADER_SIZE:
+    if config["NEED_ERROR_CHECK"]: 
+        recovery_number = reed_solomon_recovory_symbol[:1]
+        recovery_status = reed_solomon_recovory_symbol[1:2]
+        if recovery_status != b'\x00':
+            return
+
+    OPT_EXTRA_HEADER = config["OPT_EXTRA_HEADER"]
+    OPT_EXTRA_TRAILER = config["OPT_EXTRA_TRAILER"]
+    TX_HEADER_SIZE = config["TX_HEADER_SIZE"]
+    PAYLOAD_SIZE = config["PAYLOAD_SIZE"]
+
+    trimmed = raw_packet[OPT_EXTRA_HEADER:]
+    transmitter_packet = trimmed[:-OPT_EXTRA_TRAILER]
+    if len(transmitter_packet) < TX_HEADER_SIZE:
         return None
     # Validate VCDU header (first 2 bytes)
     vcdu = transmitter_packet[0:2]
+    # print((transmitter_packet))
     if vcdu != b'\x55\x40':
         return None
-    if len(transmitter_packet) != 1115:
-        return None
+    # if len(transmitter_packet) != 1115:
+    #     return None
     
     # Sequence number: bytes 2-4 (3 bytes)
     seq = int.from_bytes(transmitter_packet[2:5], 'big')
     mdpu_header = transmitter_packet[6:28]
-    payload = transmitter_packet[28:28+C.PAYLOAD_SIZE]
+    payload = transmitter_packet[28:28+PAYLOAD_SIZE]
 
     ptype = mdpu_header[21]
 
@@ -62,17 +70,23 @@ def decode_packets(target_file, packet_groups):
     """
     with open(target_file, 'rb') as f:
         raw_data = f.read()
-        
+    print(f"load file {target_file}")
     packet_chunks = raw_data.split(C.SYNC_MARKER)[1:]
     if not packet_chunks:
-        raise ValueError("No packets found in received file.")
+        # raise ValueError("No packets found in received file.")
+        print("No packets found in received file.")
+        return packet_groups 
+    if target_file.endswith(".bin"):
+        config = C.CONFIG_ADNICS
+    else:
+        config = C.CONFIG_ASTROCUB
+
     print("chunk length")
     print(len(packet_chunks))
     # packet_groups = {}   # key: file_uid, value: dictionary with keys: 'packets', 'total_packet_size', 'dest_callsign'
-    j = 0
     for chunk in tqdm(packet_chunks, desc="Processing packets"):
-        j += 1
-        result = process_packet(chunk)
+        # print(packet_chunks)
+        result = process_packet(chunk,config)
         if result is None:
             continue
         seq, ptype, total_packet_size, payload, file_uid, mdpu_header = result
