@@ -1,6 +1,8 @@
-import os
 import datetime
 from tqdm import tqdm
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # Constants (should match the transmitter and optical processing)
 SYNC_MARKER = b'\x1A\xCF\xFC\x1D'
@@ -63,7 +65,8 @@ def decode_packets(received_file):
       'num_packets': total expected (from MDPU header)
       'dest_callsign': extracted from MDPU header
     """
-    with open(received_file, 'rb') as f:
+    received_file = Path(received_file)
+    with received_file.open("rb") as f:
         raw_data = f.read()
     packet_chunks = raw_data.split(SYNC_MARKER)[1:]
     if not packet_chunks:
@@ -129,12 +132,15 @@ def reassemble_group(group):
     return final_data, first_seq, expected_last_seq, missing_seq, file_type, calculated_file_size
 
 
-def save_group_file(data, file_uid, file_type, first_seq, expected_last_seq, missing_seq, output_dir='./decoded'):
-    os.makedirs(output_dir, exist_ok=True)
+def save_group_file(data, file_uid, file_type, first_seq, expected_last_seq, missing_seq, output_dir=None):
+    output_dir = PROJECT_ROOT / "decoded" if output_dir is None else Path(output_dir)
+    if not output_dir.is_absolute():
+        output_dir = PROJECT_ROOT / output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     ext = {'BIN':'bin','CSV':'csv','TXT':'txt','LOG':'log','JPG':'jpg','H264':'h264'}.get(file_type, 'dat')
-    filename = os.path.join(output_dir, f"decoded_{timestamp}_{file_uid}_{file_type}.{ext}")
-    with open(filename, 'wb') as f:
+    filename = output_dir / f"decoded_{timestamp}_{file_uid}_{file_type}.{ext}"
+    with filename.open("wb") as f:
         f.write(data)
     print(f"Saved {file_type} file for UID {file_uid}: {filename}")
     if missing_seq:
@@ -143,7 +149,7 @@ def save_group_file(data, file_uid, file_type, first_seq, expected_last_seq, mis
 
 
 def main():
-    received_file = r"/Users/rh/Desktop/programing/python/2026/vertecs/x_band_analyzer/data/raw_data_unprocessed/hold/qpsk20Mbps.cadu"
+    received_file = PROJECT_ROOT / "data" / "raw_data_unprocessed" / "hold" / "qpsk20Mbps.cadu"
     print(f"Decoding file: {received_file}")
     groups = decode_packets(received_file)
     if not groups:

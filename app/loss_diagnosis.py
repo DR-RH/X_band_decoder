@@ -14,8 +14,8 @@
 from common import decode_utils, file_io
 import csv
 import datetime
-import os
 from common import constants as CONST
+from common.paths import REPORT_DIR
 
 def packet_loss_diagnosis(packet_groups):
     """
@@ -84,9 +84,9 @@ def _extract_extension(packet_group):
 
 def _create_loss_report_file():
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    os.makedirs("output/report", exist_ok=True)
-    path = f"output/report/{timestamp}.csv"
-    with open(path, mode="w") as f:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    path = REPORT_DIR / f"{timestamp}.csv"
+    with path.open(mode="w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["ID", "extension", "start", "end", "number"])
 

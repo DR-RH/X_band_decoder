@@ -1,5 +1,6 @@
 import common.constants as C
 from tqdm import tqdm
+from pathlib import Path
 
 def process_packet(raw_packet,config):
     """
@@ -68,15 +69,16 @@ def decode_packets(target_file, packet_groups):
       'total_packet_size': total number of packets expected (from MDPU header, same for all packets in packet_group)
       'dest_callsign': destination callsign extracted from MDPU header.
     """
-    with open(target_file, 'rb') as f:
+    target_path = Path(target_file)
+    with target_path.open("rb") as f:
         raw_data = f.read()
-    print(f"load file {target_file}")
+    print(f"load file {target_path}")
     packet_chunks = raw_data.split(C.SYNC_MARKER)[1:]
     if not packet_chunks:
         # raise ValueError("No packets found in received file.")
         print("No packets found in received file.")
         return packet_groups 
-    if target_file.endswith(".bin"):
+    if target_path.suffix.lower() == ".bin":
         config = C.CONFIG_ADNICS
     else:
         config = C.CONFIG_ASTROCUB

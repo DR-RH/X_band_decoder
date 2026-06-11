@@ -1,6 +1,6 @@
-import glob
 from app import decode_controller, loss_diagnosis,  move_files
 from common import file_io
+from common.paths import RAW_DATA_UNPROCESSED_DIR, ensure_runtime_dirs
 
 """
 保守のためのテストコードを書く。
@@ -8,6 +8,7 @@ loggingを用いる
 """
 
 def main(file_paths):
+    ensure_runtime_dirs()
     # 1. 既存の損失データ読込
     packet_groups = file_io.load_loss_packet_group()
     # print(packet_groups)
@@ -19,9 +20,17 @@ def main(file_paths):
     # 4. 後処理（移動）
     move_files.move_files(file_paths)
 
+def find_raw_files():
+    ensure_runtime_dirs()
+    return sorted(
+        path
+        for path in RAW_DATA_UNPROCESSED_DIR.iterdir()
+        if path.is_file() and path.suffix.lower() in {".bin", ".cadu"}
+    )
+
+
 if __name__ == "__main__": 
-    file_paths = glob.glob("data/raw_data_unprocessed/*.bin") + glob.glob("data/raw_data_unprocessed/*.cadu")
-    file_paths.sort(reverse=False)
+    file_paths = find_raw_files()
     main(file_paths)
 
 
