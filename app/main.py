@@ -16,8 +16,8 @@ def main(file_paths):
 
     # 3. ロス解析 & 保存
     loss_diagnosis.packet_loss_diagnosis(decoded_packet_groups)
-    # 4. 後処理（例: 移動）
-    # move_files.move_files(file_paths)
+    # 4. 後処理（移動）
+    move_files.move_files(file_paths)
 
 if __name__ == "__main__": 
     file_paths = glob.glob("data/raw_data_unprocessed/*.bin") + glob.glob("data/raw_data_unprocessed/*.cadu")
