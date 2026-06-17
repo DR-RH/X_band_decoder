@@ -12,6 +12,12 @@ from common.paths import (
     X_BAND_DECODED_DIR_EE_FILLED,
     resolve_repo_path,
 )
+import numpy as np
+from astropy.io import fits
+
+IMAGE_SHAPE = (3003, 3008)
+FITS_BLOCK_SIZE = 2880
+
 
 def save_loss_packet_group(packet_loss_group,):
     LOSS_PACKET_GROUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -26,7 +32,30 @@ def load_loss_packet_group():
         return {}
     with path.open("rb") as f:
         return pickle.load(f)
-    
+
+def save_bin_bytes_as_fits(data, file_uid, extension, header=None, overwrite=True, output_dir=X_BAND_DECODED_DIR):
+    output_path = resolve_repo_path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    file_created_time = datetime.datetime.fromtimestamp(int(file_uid,16)).strftime("%Y%m%d%H%M%S")
+    filename = output_path / f"decoded_{file_created_time}.fits"
+
+    expected_bytes = IMAGE_SHAPE[0] * IMAGE_SHAPE[1] * 2
+    if len(data) != expected_bytes:
+        raise ValueError(f"Expected {expected_bytes} bytes, got {len(data)}")
+
+    image = np.frombuffer(data, dtype=np.uint16)
+    image = (image.astype(np.int32)).astype(np.int16)
+    image = image.reshape(IMAGE_SHAPE)
+
+
+    hdu = fits.PrimaryHDU(data=image)
+    if header:
+        for key, value in header.items():
+            hdu.header[key] = value
+    hdu.writeto(filename, overwrite=overwrite)
+    return 
+
 def save_packet_group_file(data, file_uid, extension, output_dir=X_BAND_DECODED_DIR):
     output_path = resolve_repo_path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -35,6 +64,7 @@ def save_packet_group_file(data, file_uid, extension, output_dir=X_BAND_DECODED_
     filename = output_path / f"decoded_{file_created_time}.{extension}"
     with filename.open("wb") as f:
         f.write(data)
+        
     print(f"Saved {extension} file for UID {file_uid} as: {filename}")
     return filename
 
