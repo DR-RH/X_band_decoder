@@ -9,6 +9,7 @@ from common.paths import (
     RAW_DATA_PROCESSED_DIR,
     REPORT_DIR,
     X_BAND_DECODED_DIR,
+    X_BAND_DECODED_DIR_EE_FILLED,
     resolve_repo_path,
 )
 
@@ -31,11 +32,23 @@ def save_packet_group_file(data, file_uid, extension, output_dir=X_BAND_DECODED_
     output_path.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     file_created_time = datetime.datetime.fromtimestamp(int(file_uid,16)).strftime("%Y%m%d%H%M%S")
-    filename = output_path / f"decoded_{file_created_time}_{timestamp}.{extension}"
+    filename = output_path / f"decoded_{file_created_time}.{extension}"
     with filename.open("wb") as f:
         f.write(data)
     print(f"Saved {extension} file for UID {file_uid} as: {filename}")
     return filename
+
+def save_packet_group_file_EE_filled(data, file_uid, extension, output_dir=X_BAND_DECODED_DIR_EE_FILLED):
+    output_path = resolve_repo_path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    file_created_time = datetime.datetime.fromtimestamp(int(file_uid,16)).strftime("%Y%m%d%H%M%S")
+    filename = output_path / f"decoded_{file_created_time}.{extension}"
+    with filename.open("wb") as f:
+        f.write(data)
+    print(f"Saved {extension} file for UID {file_uid} as: {filename}")
+    return filename
+
 
 def move_files(file_paths):
     print(f"move files {file_paths}" )

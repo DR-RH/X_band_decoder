@@ -19,8 +19,8 @@ from common.paths import REPORT_DIR
 
 def packet_loss_diagnosis(packet_groups):
     """
-    ロスあり -> ロスレポート
-    ロスなし -> 完成ファイル生成
+    ロスあり -> ロスレポート + EEフィル済み未完成ファイル保存
+    ロスなし -> 完成ファイル生成 
     ロスの有無にかかわらず -> 次回用パケットグループを保存
     """
 
@@ -44,15 +44,22 @@ def packet_loss_diagnosis(packet_groups):
 # -----------------------------
 # 1. ロス解析
 # -----------------------------
+# def analyze_packet_loss(packet_group):
+#     """ロス位置(index)をリストで返す"""
+#     # print(packet_group)
+#     payloads = packet_group["payloads"]
+#     loss_sequence = [
+#         i for i, packet in enumerate(payloads)
+#         if packet == bytes([0xEE]) * CONST.PAYLOAD_SIZE
+#     ]
+#     return loss_sequence
+
 def analyze_packet_loss(packet_group):
     """ロス位置(index)をリストで返す"""
-    # print(packet_group)
-    payloads = packet_group["payloads"]
-    loss_sequence = [
-        i for i, packet in enumerate(payloads)
-        if packet == bytes([0xEE]) * CONST.PAYLOAD_SIZE
+    return [
+        i for i, ptype in enumerate(packet_group["ptypes"])
+        if ptype is None
     ]
-    return loss_sequence
 
 # -----------------------------
 # 2. ロスなしケース処理
@@ -69,17 +76,30 @@ def _handle_complete_case(file_uid, extension, packet_group):
 # -----------------------------
 def _handle_loss_case(report_path, file_uid, extension, loss_sequence,
                       packet_group, loss_packet_groups):
-
     file_io.write_loss_report(report_path, file_uid, extension, loss_sequence)
+
+    missing_count = len(loss_sequence)
+    received_count = len(packet_group["ptypes"]) - missing_count
+    print(f"save EE-filled {file_uid}: received={received_count}, missing={missing_count}")
+
+    payloads = packet_group["payloads"]
+    reassembled_data = reassemble_payload(payloads, extension)
+    file_io.save_packet_group_file_EE_filled(reassembled_data, file_uid, extension, )
+    
     loss_packet_groups[file_uid] = packet_group
 
 
 # -----------------------------
 # 付属機能
 # -----------------------------
+# def _extract_extension(packet_group):
+#     ptype = packet_group["ptypes"][0]
+#     return decode_utils.extension_from_ptype(ptype)
 def _extract_extension(packet_group):
-    ptype = packet_group["ptypes"][0]
-    return decode_utils.extension_from_ptype(ptype)
+    for ptype in packet_group["ptypes"]:
+        if ptype is not None:
+            return decode_utils.extension_from_ptype(ptype)
+    raise ValueError("Cannot determine extension because all packet types are missing")
 
 
 def _create_loss_report_file():
