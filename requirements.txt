@@ -1,6 +1,8 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
+astropy==7.2.1
+astropy-iers-data==0.2026.6.15.15.33.16
 boto3==1.43.10
 botocore==1.43.10
 click==8.3.3
@@ -23,6 +25,7 @@ pillow==12.0.0
 pluggy==1.6.0
 pydantic==2.13.3
 pydantic_core==2.46.3
+pyerfa==2.0.1.5
 Pygments==2.19.2
 pyparsing==3.3.1
 pyserial==3.5
