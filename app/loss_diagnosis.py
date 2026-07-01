@@ -69,9 +69,9 @@ def _handle_complete_case(file_uid, extension, packet_group):
     reassembled_data = reassemble_payload(payloads, extension)
     file_io.save_packet_group_file(reassembled_data, file_uid, extension)
     print(extension)
-    if extension == "bin":
-        file_io.save_bin_bytes_as_fits(reassembled_data, file_uid, extension)
-        print('save fits')
+    # if extension == "bin":
+    #     file_io.save_bin_bytes_as_fits(reassembled_data, file_uid, extension)
+    #     print('save fits')
         
     print(f"save {file_uid}")
 
