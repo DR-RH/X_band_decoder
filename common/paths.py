@@ -11,7 +11,7 @@ LOSS_PACKET_GROUP_DIR = DATA_DIR / "loss_packet_group"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 X_BAND_DECODED_DIR = OUTPUT_DIR / "X_band_decoded"
 X_BAND_DECODED_DIR_EE_FILLED = OUTPUT_DIR / "X_band_decoded_EE_filled"
-REPORT_DIR = OUTPUT_DIR / "report"
+REPORT_DIR = OUTPUT_DIR / "packet_loss_report"
 
 
 def resolve_repo_path(path):
