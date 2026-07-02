@@ -110,6 +110,20 @@ def decode_packets(target_file, packet_groups):
                 'total_packet_size': total_packet_size,
                 'dest_callsign': dest
             }
+        else:
+            current_total = packet_groups[file_uid]["total_packet_size"]
+
+            if total_packet_size > current_total:
+                extension = total_packet_size - current_total
+                packet_groups[file_uid]["payloads"].extend(
+                    [bytes([0xEE]) * C.PAYLOAD_SIZE for _ in range(extension)]
+                )
+                packet_groups[file_uid]["ptypes"].extend([None] * extension)
+                packet_groups[file_uid]["total_packet_size"] = total_packet_size
+                packet_groups[file_uid].setdefault(
+                    "declared_total_packet_sizes", [current_total]
+                ).append(total_packet_size)
+
 
         packet_groups[file_uid]['payloads'][seq] = payload
         packet_groups[file_uid]['ptypes'][seq] = ptype
