@@ -111,6 +111,7 @@ def main():
 
         plt.imshow(image)
         plt.show()
+        input()
 
 
 if __name__ == '__main__':

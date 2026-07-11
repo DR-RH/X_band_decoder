@@ -164,6 +164,9 @@ def extension_from_ptype(ptype):
         extension = 'csv'
     elif ptype == 0x05:
         extension = 'jpg'
+    elif ptype == 0x06:
+        extension = 'h264'
+
     else:
         extension = 'bin'
     return extension
