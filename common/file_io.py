@@ -34,6 +34,7 @@ def load_loss_packet_group():
         return pickle.load(f)
 
 def save_bin_bytes_as_fits(data, file_uid, extension, header=None, overwrite=True, output_dir=X_BAND_DECODED_DIR):
+
     output_path = resolve_repo_path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -59,12 +60,18 @@ def save_bin_bytes_as_fits(data, file_uid, extension, header=None, overwrite=Tru
 def save_packet_group_file(data, file_uid, extension, output_dir=X_BAND_DECODED_DIR):
     output_path = resolve_repo_path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+    received_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S_%f")
     file_created_time = datetime.datetime.fromtimestamp(int(file_uid,16)).strftime("%Y%m%d%H%M%S")
-    filename = output_path / f"decoded_{file_created_time}.{extension}"
+
+    if extension in {"txt", "log"}:
+        filename = output_path / f"decoded_{file_created_time}_{received_time}.{extension}"
+    else:
+        filename = output_path / f"decoded_{file_created_time}.{extension}"
+
     with filename.open("wb") as f:
         f.write(data)
-        
+
     print(f"Saved {extension} file for UID {file_uid} as: {filename}")
     return filename
 
