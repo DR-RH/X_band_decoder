@@ -13,7 +13,6 @@ from common.paths import (
     resolve_repo_path,
 )
 import numpy as np
-from astropy.io import fits
 
 IMAGE_SHAPE = (3003, 3008)
 FITS_BLOCK_SIZE = 2880
@@ -34,6 +33,7 @@ def load_loss_packet_group():
         return pickle.load(f)
 
 def save_bin_bytes_as_fits(data, file_uid, extension, header=None, overwrite=True, output_dir=X_BAND_DECODED_DIR):
+    from astropy.io import fits
 
     output_path = resolve_repo_path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -96,13 +96,13 @@ def move_files(file_paths):
         shutil.move(str(source), str(dst_filename))
     return
 
-def write_loss_report(report_path, file_uid, extension, loss_sequence):
+def write_loss_report(report_path, file_uid, extension, loss_sequence, total_packet):
     ranges = decode_utils.get_ranges(loss_sequence)
     report_path = resolve_repo_path(report_path)
     with report_path.open(mode="a", newline="") as f:
         writer = csv.writer(f)
         for rng in ranges:
-            writer.writerow([file_uid,extension]+list(rng))
+            writer.writerow([file_uid, extension] + list(rng) + [total_packet])
 
 def create_loss_report_file():
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -110,5 +110,5 @@ def create_loss_report_file():
     report_path = REPORT_DIR / f"{timestamp}.csv"
     with report_path.open(mode="w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["ID", "extension", "start", "end", "number"])
+        writer.writerow(["ID", "extension", "start", "end", "number", "total_packet"])
     return report_path

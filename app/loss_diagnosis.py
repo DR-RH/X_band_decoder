@@ -84,7 +84,13 @@ def _handle_complete_case(file_uid, extension, packet_group):
 # -----------------------------
 def _handle_loss_case(report_path, file_uid, extension, loss_sequence,
                       packet_group, loss_packet_groups):
-    file_io.write_loss_report(report_path, file_uid, extension, loss_sequence)
+    file_io.write_loss_report(
+        report_path,
+        file_uid,
+        extension,
+        loss_sequence,
+        packet_group["total_packet_size"],
+    )
 
     missing_count = len(loss_sequence)
     received_count = len(packet_group["ptypes"]) - missing_count
@@ -116,7 +122,7 @@ def _create_loss_report_file():
     path = REPORT_DIR / f"{timestamp}.csv"
     with path.open(mode="w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["ID", "extension", "start", "end", "number"])
+        writer.writerow(["ID", "extension", "start", "end", "number", "total_packet"])
 
     return path
 
