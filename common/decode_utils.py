@@ -113,16 +113,27 @@ def decode_packets(target_file, packet_groups):
         else:
             current_total = packet_groups[file_uid]["total_packet_size"]
 
-            if total_packet_size > current_total:
-                extension = total_packet_size - current_total
-                packet_groups[file_uid]["payloads"].extend(
-                    [bytes([0xEE]) * C.PAYLOAD_SIZE for _ in range(extension)]
+            if ptype == 0x03 and total_packet_size != current_total:
+                print(
+                    f"txt total_packet_size changed for UID {file_uid}: "
+                    f"{current_total} -> {total_packet_size}. "
+                    "discard old group and restart."
                 )
-                packet_groups[file_uid]["ptypes"].extend([None] * extension)
-                packet_groups[file_uid]["total_packet_size"] = total_packet_size
-                packet_groups[file_uid].setdefault(
-                    "declared_total_packet_sizes", [current_total]
-                ).append(total_packet_size)
+
+                dest = mdpu_header[2:9].split(b'\x00')[0].decode(
+                    'ascii',
+                    errors='replace',
+                )
+                packet_groups[file_uid] = {
+                    'payloads': [
+                        bytes([0xEE]) * C.PAYLOAD_SIZE
+                        for _ in range(total_packet_size)
+                    ],
+                    'ptypes': [None] * total_packet_size,
+                    'total_packet_size': total_packet_size,
+                    'dest_callsign': dest,
+                    'discarded_total_packet_size': current_total,
+                }
 
 
         packet_groups[file_uid]['payloads'][seq] = payload
