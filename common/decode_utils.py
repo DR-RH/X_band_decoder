@@ -1,4 +1,5 @@
 import common.constants as C
+from collections import Counter
 from tqdm import tqdm
 from pathlib import Path
 
@@ -60,7 +61,7 @@ def process_packet(raw_packet,config):
     file_uid = mdpu_header[9:13].hex()
     return seq, ptype, actual_file_length, payload, file_uid, mdpu_header
 
-def decode_packets(target_file, packet_groups):
+def decode_packets(target_file, packet_groups, stats=None):
     """
     Reads the received optical file, processes each packet, and packet_groups packets by file UID.
     
@@ -69,6 +70,7 @@ def decode_packets(target_file, packet_groups):
       'total_packet_size': total number of packets expected (from MDPU header, same for all packets in packet_group)
       'dest_callsign': destination callsign extracted from MDPU header.
     """
+    stats = Counter() if stats is None else stats
     target_path = Path(target_file)
     with target_path.open("rb") as f:
         raw_data = f.read()
@@ -82,6 +84,7 @@ def decode_packets(target_file, packet_groups):
         config = C.CONFIG_ADNICS
     else:
         config = C.CONFIG_ASTROCUB
+    payload_size = config["PAYLOAD_SIZE"]
 
     print("chunk length")
     print(len(packet_chunks))
@@ -90,13 +93,24 @@ def decode_packets(target_file, packet_groups):
         # print(packet_chunks)
         result = process_packet(chunk,config)
         if result is None:
+            stats["frame_rejected"] += 1
             continue
         seq, ptype, total_packet_size, payload, file_uid, mdpu_header = result
+
+        # 再結合は b"".join() なので、1本でも短いと以降の全データがずれる
+        if len(payload) != payload_size:
+            stats["short_payload"] += 1
+            continue
+
         if ptype == 0x00:
-            total_packet_size = 16621
+            total_packet_size = C.IMAGE_TOTAL_PACKETS
         # print(f'test {j}')
         # print(packet_groups.keys())
         if file_uid not in packet_groups.keys():
+            # 確保前に検証し、空グループの残骸を作らない
+            if not 0 <= seq < total_packet_size:
+                stats["seq_out_of_range"] += 1
+                continue
             print(f'{file_uid}')
             print(f'test in fileud')
             print(f'{seq, ptype, total_packet_size, file_uid, mdpu_header }')
@@ -136,8 +150,14 @@ def decode_packets(target_file, packet_groups):
                 }
 
 
-        packet_groups[file_uid]['payloads'][seq] = payload
+        # txt リスタートでサイズが変わり得るので、実スロット数に対して最終検証する
+        payloads = packet_groups[file_uid]['payloads']
+        if not 0 <= seq < len(payloads):
+            stats["seq_out_of_range"] += 1
+            continue
+        payloads[seq] = payload
         packet_groups[file_uid]['ptypes'][seq] = ptype
+        stats["stored"] += 1
     return packet_groups
 
 def get_ranges(nums):
