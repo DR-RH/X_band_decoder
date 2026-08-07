@@ -1,6 +1,8 @@
 import pickle
 import shutil
 import datetime
+import os
+import tempfile
 from common import decode_utils
 import csv
 from pathlib import Path
@@ -19,19 +21,112 @@ IMAGE_SHAPE = (3003, 3008)
 FITS_BLOCK_SIZE = 2880
 
 
-def save_loss_packet_group(packet_loss_group,):
-    LOSS_PACKET_GROUP_DIR.mkdir(parents=True, exist_ok=True)
-    path = LOSS_PACKET_GROUP_DIR / "loss_packet_group.pkl"
-    with path.open("wb") as f:
-        pickle.dump(packet_loss_group, f)
-    return
+LOSS_PACKET_GROUP_PATH = LOSS_PACKET_GROUP_DIR / "loss_packet_group.pkl"
+
+
+def _bak_path(path):
+    return path.with_name(path.name + ".bak")
+
+
+def _fsync_dir(directory):
+    """rename 自体をディスクへ確定させる。Windows は非対応なので黙って諦める。"""
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _sweep_stale_tmp(path):
+    """異常終了で取り残された一時ファイルを掃除する（1個1GB級なので放置できない）。"""
+    for stale in path.parent.glob(path.name + ".*.tmp"):
+        try:
+            stale.unlink()
+            print(f"[file_io] 取り残された一時ファイルを削除: {stale}")
+        except OSError:
+            pass
+
+
+def atomic_pickle_dump(obj, path, keep_backup=True):
+    """同一ディレクトリの一時ファイルへ書き切ってから os.replace で差し替える。
+
+    途中で落ちても path は直前の内容のまま残り、部分書き込みが表に出ない。
+    直前世代は .bak へ退避する。退避にハードリンクを使うので 1GB の
+    コピー I/O は発生しない（ただし2世代がディスクを占めるのは避けられない）。
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _sweep_stale_tmp(path)
+
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
+            f.flush()
+            os.fsync(f.fileno())
+
+        if keep_backup and path.exists():
+            bak = _bak_path(path)
+            bak.unlink(missing_ok=True)
+            try:
+                os.link(path, bak)
+            except OSError:
+                pass  # 非対応FSならバックアップ無しで続行する
+
+        os.replace(tmp_path, path)
+        _fsync_dir(path.parent)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def _quarantine(path):
+    """壊れたファイルを退避する。削除はしない（次回起動をブロックさせないため）。"""
+    stamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    dead = path.with_name(f"{path.name}.corrupt.{stamp}")
+    try:
+        os.replace(path, dead)
+        print(f"[file_io] 破損ファイルを退避しました: {dead}")
+    except OSError as exc:
+        print(f"[file_io] 破損ファイルの退避に失敗: {path}: {exc!r}")
+
+
+def safe_pickle_load(path, default_factory=dict):
+    """本体 -> .bak の順に読む。壊れていれば退避して次の候補へ落ちる。"""
+    path = Path(path)
+    for candidate, label in ((path, "本体"), (_bak_path(path), "バックアップ")):
+        if not candidate.exists():
+            continue
+        try:
+            with candidate.open("rb") as f:
+                data = pickle.load(f)
+        except Exception as exc:
+            print(f"[file_io] {label}が読めません ({candidate}): {exc!r}")
+            _quarantine(candidate)
+            continue
+        if not isinstance(data, dict):
+            print(f"[file_io] {label}の型が不正です ({candidate}): {type(data).__name__}")
+            _quarantine(candidate)
+            continue
+        if label != "本体":
+            print(f"[file_io] {label}から復旧しました: {candidate}")
+        return data
+    return default_factory()
+
+
+def save_loss_packet_group(packet_loss_group):
+    return atomic_pickle_dump(packet_loss_group, LOSS_PACKET_GROUP_PATH)
+
 
 def load_loss_packet_group():
-    path = LOSS_PACKET_GROUP_DIR / "loss_packet_group.pkl"
-    if not path.exists():
-        return {}
-    with path.open("rb") as f:
-        return pickle.load(f)
+    return safe_pickle_load(LOSS_PACKET_GROUP_PATH)
 
 def save_bin_bytes_as_fits(data, file_uid, extension, header=None, overwrite=True, output_dir=X_BAND_DECODED_DIR):
 

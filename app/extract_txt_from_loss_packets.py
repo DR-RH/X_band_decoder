@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import pickle
 from pathlib import Path
 from typing import Any
+
+from common.file_io import atomic_pickle_dump, safe_pickle_load
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -15,21 +16,11 @@ TXT_PTYPE = 0x03
 
 
 def load_packet_groups(path: Path) -> dict[str, dict[str, Any]]:
-    if not path.exists():
-        return {}
-
-    with path.open("rb") as f:
-        groups = pickle.load(f)
-
-    if not isinstance(groups, dict):
-        raise TypeError(f"Expected dict in {path}, got {type(groups).__name__}")
-    return groups
+    return safe_pickle_load(path)
 
 
 def save_packet_groups(path: Path, groups: dict[str, dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as f:
-        pickle.dump(groups, f)
+    atomic_pickle_dump(groups, path)
 
 
 def packet_type_set(packet_group: dict[str, Any]) -> set[int]:
