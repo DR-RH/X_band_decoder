@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import pickle
+import os
 import shutil
 from pathlib import Path
 from typing import Any
+
+from common.file_io import atomic_pickle_dump, safe_pickle_load
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -21,26 +23,33 @@ PTYPE_EXTENSIONS = {
 
 
 def load_packet_groups(path: Path) -> dict[str, dict[str, Any]]:
-    if not path.exists():
-        return {}
-
-    with path.open("rb") as f:
-        groups = pickle.load(f)
-
-    if not isinstance(groups, dict):
-        raise TypeError(f"Expected dict in {path}, got {type(groups).__name__}")
-    return groups
+    return safe_pickle_load(path)
 
 
-def save_packet_groups(path: Path, groups: dict[str, dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as f:
-        pickle.dump(groups, f)
+def save_packet_groups(
+    path: Path,
+    groups: dict[str, dict[str, Any]],
+    *,
+    keep_backup: bool = True,
+) -> None:
+    atomic_pickle_dump(groups, path, keep_backup=keep_backup)
 
 
 def backup_path_for(path: Path) -> Path:
     timestamp = dt.datetime.now().strftime("%Y%m%d%H%M%S_%f")
     return path.with_name(f"{path.name}.{timestamp}.bak")
+
+
+def create_backup(path: Path, backup_path: Path) -> None:
+    """世代バックアップを取る。
+
+    pkl をその場で書き換えるコードはもう無い（書き込みは全て一時ファイル +
+    os.replace）ので、ハードリンクで足りる。1GB の実コピーが不要になる。
+    """
+    try:
+        os.link(path, backup_path)
+    except OSError:
+        shutil.copy2(path, backup_path)
 
 
 def packet_type_set(packet_group: dict[str, Any]) -> set[int]:
@@ -105,10 +114,10 @@ def remove_packet_groups(
     if removed and not dry_run:
         if backup and input_path.exists():
             backup_path = backup_path_for(input_path)
-            shutil.copy2(input_path, backup_path)
+            create_backup(input_path, backup_path)
             print(f"backup: {backup_path}")
 
-        save_packet_groups(input_path, packet_groups)
+        save_packet_groups(input_path, packet_groups, keep_backup=backup)
 
     print(
         f"summary: removed={removed}, not_found={not_found}, "
