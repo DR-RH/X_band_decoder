@@ -3,6 +3,45 @@ from collections import Counter
 from tqdm import tqdm
 from pathlib import Path
 
+# 未受信スロットを埋める不変オブジェクト。
+# 内包表記で毎回 bytes を作ると、値が同じオブジェクトが total_packet_size 個
+# できてしまう（画像1グループで 18.75MB）。1個を共有すれば 0.13MB で済み、
+# pickle も同一オブジェクトを1回しか書かないので保存サイズも縮む。
+EE_PAYLOAD = bytes([0xEE]) * C.PAYLOAD_SIZE
+
+# ファイルを読み進める単位。全体を一度に展開しないためのもの。
+READ_BLOCK_SIZE = 1 << 22  # 4MiB
+
+
+def iter_packet_chunks(target_path, marker):
+    """raw_data.split(marker)[1:] と同じチャンク列を、全展開せず1つずつ返す。
+
+    ファイル全体の bytes と split 後のリストを同時に持つと、運用機のサイズ
+    (648MB) では 1ファイルあたり約 1.3GB になる。ブロック読みしながら
+    マーカーを探すことで、常駐するのは末尾の端数だけになる。
+    """
+    marker_length = len(marker)
+    with target_path.open("rb") as f:
+        buffer = b""
+        seen_first_marker = False
+        while True:
+            block = f.read(READ_BLOCK_SIZE)
+            if not block:
+                break
+            buffer += block
+            position = 0
+            while True:
+                index = buffer.find(marker, position)
+                if index < 0:
+                    break
+                if seen_first_marker:
+                    yield buffer[position:index]
+                seen_first_marker = True
+                position = index + marker_length
+            buffer = buffer[position:]
+        if seen_first_marker and buffer:
+            yield buffer
+
 def process_packet(raw_packet,config):
     """
     Process a single raw optical packet (one chunk from splitting by the sync marker).
@@ -72,25 +111,18 @@ def decode_packets(target_file, packet_groups, stats=None):
     """
     stats = Counter() if stats is None else stats
     target_path = Path(target_file)
-    with target_path.open("rb") as f:
-        raw_data = f.read()
     print(f"load file {target_path}")
-    packet_chunks = raw_data.split(C.SYNC_MARKER)[1:]
-    if not packet_chunks:
-        # raise ValueError("No packets found in received file.")
-        print("No packets found in received file.")
-        return packet_groups 
     if target_path.suffix.lower() == ".bin":
         config = C.CONFIG_ADNICS
     else:
         config = C.CONFIG_ASTROCUB
     payload_size = config["PAYLOAD_SIZE"]
 
-    print("chunk length")
-    print(len(packet_chunks))
-    # packet_groups = {}   # key: file_uid, value: dictionary with keys: 'packets', 'total_packet_size', 'dest_callsign'
-    for chunk in tqdm(packet_chunks, desc="Processing packets"):
-        # print(packet_chunks)
+    # 総数が事前に分からないので tqdm には total を渡さない（進捗は件数表示）
+    chunk_count = 0
+    for chunk in tqdm(iter_packet_chunks(target_path, C.SYNC_MARKER),
+                      desc="Processing packets"):
+        chunk_count += 1
         result = process_packet(chunk,config)
         if result is None:
             stats["frame_rejected"] += 1
@@ -119,7 +151,7 @@ def decode_packets(target_file, packet_groups, stats=None):
             dest = mdpu_header[2:9].split(b'\x00')[0].decode('ascii', errors='replace')
             # packet_groups[file_uid] = {'packets':{"payload":[b'FF'] * total_packet_size,'ptype':ptype}, 'total_packet_size': total_packet_size, 'dest_callsign': dest}
             packet_groups[file_uid] = {
-                'payloads': [bytes([0xEE]) * C.PAYLOAD_SIZE for _ in range(total_packet_size)],
+                'payloads': [EE_PAYLOAD] * total_packet_size,
                 'ptypes': [None] * total_packet_size,
                 'total_packet_size': total_packet_size,
                 'dest_callsign': dest
@@ -139,10 +171,7 @@ def decode_packets(target_file, packet_groups, stats=None):
                     errors='replace',
                 )
                 packet_groups[file_uid] = {
-                    'payloads': [
-                        bytes([0xEE]) * C.PAYLOAD_SIZE
-                        for _ in range(total_packet_size)
-                    ],
+                    'payloads': [EE_PAYLOAD] * total_packet_size,
                     'ptypes': [None] * total_packet_size,
                     'total_packet_size': total_packet_size,
                     'dest_callsign': dest,
@@ -158,6 +187,11 @@ def decode_packets(target_file, packet_groups, stats=None):
         payloads[seq] = payload
         packet_groups[file_uid]['ptypes'][seq] = ptype
         stats["stored"] += 1
+
+    if chunk_count == 0:
+        print("No packets found in received file.")
+    else:
+        print(f"chunk length {chunk_count}")
     return packet_groups
 
 def get_ranges(nums):
