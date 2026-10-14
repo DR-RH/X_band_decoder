@@ -11,14 +11,19 @@ def main(file_paths):
     ensure_runtime_dirs()
     # 1. 既存の損失データ読込
     packet_groups = file_io.load_loss_packet_group()
-    # print(packet_groups)
-    # 2. デコード
-    decoded_packet_groups = decode_controller.decode_all_files(file_paths, packet_groups)
 
-    # 3. ロス解析 & 保存
-    loss_diagnosis.packet_loss_diagnosis(decoded_packet_groups)
-    # 4. 後処理（移動）
-    move_files.move_files(file_paths)
+    # 2. デコード: 1ファイルずつ「保存してから移動」で確定させる。
+    #    途中で落ちてもそこまでの成果は pkl に残り、処理済みファイルは
+    #    移動済みなので次回に再処理されない（再処理の積み上がりを防ぐ）。
+    stats = decode_controller.new_stats()
+    for target_file in file_paths:
+        decode_controller.decode_file(target_file, packet_groups, stats)
+        file_io.save_loss_packet_group(packet_groups)
+        move_files.move_files([target_file])
+    decode_controller.report(stats)
+
+    # 3. ロス解析 & 保存（完成ファイルの書き出しは最後に1回だけ行う）
+    loss_diagnosis.packet_loss_diagnosis(packet_groups)
 
 def find_raw_files():
     ensure_runtime_dirs()
