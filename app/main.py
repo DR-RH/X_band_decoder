@@ -1,11 +1,29 @@
+import shutil
+
 from app import decode_controller, loss_diagnosis,  move_files
 from common import file_io
-from common.paths import RAW_DATA_UNPROCESSED_DIR, ensure_runtime_dirs
+from common.paths import (
+    RAW_DATA_PROCESSING_DIR,
+    RAW_DATA_UNPROCESSED_DIR,
+    ensure_runtime_dirs,
+)
 
 """
 保守のためのテストコードを書く。
 loggingを用いる
+
+1回の実行で扱うのは1ファイルだけ。unprocessed から processing へ移して処理し、
+終わったら processed へ移す。プロセスが終われば OS がメモリを完全に返すので、
+ファイル間でメモリが積み上がらない。複数ファイルを処理したいときは、呼び出し側
+（fetch_process_X.sh）がこのコマンドを繰り返し呼ぶ。
+
+終了コード:
+  0  … 1ファイル処理した
+  10 … 処理対象が無かった（繰り返し呼び出しの停止条件）
 """
+
+RAW_SUFFIXES = {".bin", ".cadu"}
+EXIT_NOTHING_TO_DO = 10
 
 def main(file_paths):
     ensure_runtime_dirs()
@@ -25,18 +43,64 @@ def main(file_paths):
     # 3. ロス解析 & 保存（完成ファイルの書き出しは最後に1回だけ行う）
     loss_diagnosis.packet_loss_diagnosis(packet_groups)
 
-def find_raw_files():
-    ensure_runtime_dirs()
+def _raw_files_in(directory):
     return sorted(
         path
-        for path in RAW_DATA_UNPROCESSED_DIR.iterdir()
-        if path.is_file() and path.suffix.lower() in {".bin", ".cadu"}
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in RAW_SUFFIXES
     )
 
 
-if __name__ == "__main__": 
-    file_paths = find_raw_files()
-    main(file_paths)
+def find_raw_files():
+    """未処理ディレクトリに積まれている生データ。"""
+    ensure_runtime_dirs()
+    return _raw_files_in(RAW_DATA_UNPROCESSED_DIR)
+
+
+def find_staged_files():
+    """処理中ディレクトリに在る生データ。通常は 0 件か 1 件。"""
+    ensure_runtime_dirs()
+    return _raw_files_in(RAW_DATA_PROCESSING_DIR)
+
+
+def stage_next_file():
+    """未処理のうち1本だけを処理中ディレクトリへ移す。無ければ None を返す。"""
+    ensure_runtime_dirs()
+    candidates = find_raw_files()
+    if not candidates:
+        return None
+    source = candidates[0]
+    staged = RAW_DATA_PROCESSING_DIR / source.name
+    shutil.move(str(source), str(staged))
+    print(f"[stage] {source.name} -> {RAW_DATA_PROCESSING_DIR.name}/")
+    return staged
+
+
+def take_one_file():
+    """このプロセスで処理する1ファイルを決める。
+
+    処理中ディレクトリに残っているものは前回の中断分なので最優先で片付ける。
+    そうしないと、未処理から新しいファイルを引き込み続けて溜まっていく。
+    """
+    staged = find_staged_files()
+    if staged:
+        if len(staged) > 1:
+            print(
+                f"warning: 処理中ディレクトリに {len(staged)} 件ある。"
+                "先頭から1件ずつ処理する"
+            )
+        print(f"[stage] 前回の中断分を処理する: {staged[0].name}")
+        return staged[0]
+    return stage_next_file()
+
+
+if __name__ == "__main__":
+    ensure_runtime_dirs()
+    target_file = take_one_file()
+    if target_file is None:
+        print("処理対象なし")
+        raise SystemExit(EXIT_NOTHING_TO_DO)
+    main([target_file])
 
 
 # import glob
