@@ -20,9 +20,21 @@ echo "===== start: $(date '+%Y-%m-%d %H:%M:%S') ====="
 set -euo pipefail
 
 PROJECT_DIR="$HOME/X_band_decoder"
-PROCESSED_DIR="$PROJECT_DIR/data/raw_data_processed"
 DEST_DIR="$PROJECT_DIR/data/raw_data_unprocessed"
+PROCESSING_DIR="$PROJECT_DIR/data/raw_data_processing"
+PROCESSED_DIR="$PROJECT_DIR/data/raw_data_processed"
 PYTHON="$PROJECT_DIR/.venv/bin/python3.11"
+
+# 「既に持っている」と見なす置き場。ここに1つでも漏れがあると、そのパスは
+# リモートから再ダウンロードされ、同じデータが二重に存在することになる。
+# 退避用の置き場を増やしたときは、必ずここにも足すこと。
+HAVE_DIRS=(
+    "$DEST_DIR"                             # 未処理
+    "$PROCESSING_DIR"                       # 処理中（前回の中断分を含む）
+    "$PROCESSED_DIR"                        # 処理済み
+    "$PROJECT_DIR/data/hold"                # 手動退避
+    "$DEST_DIR/hold"                        # 旧来の退避場所
+)
 
 REMOTE="vertecs_x_band@133.18.122.205"
 KEY="$HOME/.ssh/x_band_key"
@@ -32,7 +44,7 @@ SSH_OPTS=(-i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=30)
 SUFFIX="_qpsk20Mbps.cadu"
 LOCK_FILE="$HOME/.fetch_process_X.lock"
 
-mkdir -p "$DEST_DIR" "$PROCESSED_DIR"
+mkdir -p "$DEST_DIR" "$PROCESSING_DIR" "$PROCESSED_DIR"
 
 # --- 多重起動の防止 ---------------------------------------------------------
 # 前回の実行が続いている間は何もせず正常終了する。
@@ -53,13 +65,15 @@ for stale in "$DEST_DIR"/*"$SUFFIX".part; do
 done
 
 # --- 既に持っているパス名の一覧 ---------------------------------------------
-# unprocessed（未処理）と processed（処理済み）の両方を見るのが肝心。
+# HAVE_DIRS のすべてを見る。1つ漏れるとそのパスが再ダウンロードされる。
 local_names() {
-    local f base
-    for f in "$DEST_DIR"/*"$SUFFIX" "$PROCESSED_DIR"/*"$SUFFIX"; do
-        [ -f "$f" ] || continue
-        base=$(basename "$f")
-        echo "${base%"$SUFFIX"}"
+    local dir f base
+    for dir in "${HAVE_DIRS[@]}"; do
+        for f in "$dir"/*"$SUFFIX"; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            echo "${base%"$SUFFIX"}"
+        done
     done | LC_ALL=C sort -u
 }
 
