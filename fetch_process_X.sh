@@ -78,22 +78,29 @@ local_names() {
 }
 
 # --- リモートのパス名の一覧 -------------------------------------------------
+# ssh は標準入力を読んで相手に転送する。while read ループの中で素のまま
+# 呼ぶと、ループに流し込んだ残りの行を ssh が食べてしまい、1件目で打ち切られる。
+# すべての ssh 呼び出しで stdin を切り離すこと（scp は -n を受け付けないので
+# SSH_OPTS には入れない）。
+remote_ssh() {
+    ssh "${SSH_OPTS[@]}" "$REMOTE" "$1" < /dev/null
+}
+
 remote_names() {
-    ssh "${SSH_OPTS[@]}" "$REMOTE" \
-        "LC_ALL=C find '$REMOTE_DATA_DIR' -maxdepth 1 -mindepth 1 -type d -printf '%f\n'" |
+    remote_ssh "LC_ALL=C find '$REMOTE_DATA_DIR' -maxdepth 1 -mindepth 1 -type d -printf '%f\n'" |
         LC_ALL=C sort
 }
 
 remote_size() {
     # リモートが BSD 系なら 'stat -c %s' を 'stat -f %z' に変える。
-    ssh "${SSH_OPTS[@]}" "$REMOTE" "stat -c %s '$1' 2>/dev/null" || true
+    remote_ssh "stat -c %s '$1' 2>/dev/null" || true
 }
 
 # --- 取得対象の決定 ---------------------------------------------------------
 # ssh が落ちたときに全件を「新規」と誤認しないよう、一覧をいったん変数に取って
 # 成否を見てから差分を取る。
 missing_names=""
-if ! ssh "${SSH_OPTS[@]}" "$REMOTE" "test -d '$REMOTE_DATA_DIR'"; then
+if ! remote_ssh "test -d '$REMOTE_DATA_DIR'"; then
     echo "リモートに接続できないか $REMOTE_DATA_DIR が無い。取得は飛ばして処理に進む"
 elif ! remote_list=$(remote_names); then
     echo "リモートの一覧取得に失敗した。取得は飛ばして処理に進む"
@@ -107,10 +114,13 @@ fi
 # --- 取得 -------------------------------------------------------------------
 # while をパイプの先に置くとサブシェルになり、集計が消えるうえ scp の失敗が
 # pipefail で全体を落とす。ヒア文字列で現在のシェルで回す。
+#
+# 読み込みは fd 3 を使う。ループ内で stdin を読むコマンド（ssh など）が
+# 残りの行を食べてしまう事故を、これで構造的に防ぐ。
 copied=0
 skipped=0
 
-while IFS= read -r name; do
+while IFS= read -r name <&3; do
     [ -n "$name" ] || continue
 
     src="$REMOTE_DATA_DIR/$name/qpsk20Mbps.cadu"
@@ -154,7 +164,7 @@ while IFS= read -r name; do
         continue
     fi
     copied=$((copied + 1))
-done <<< "$missing_names"
+done 3<<< "$missing_names"
 
 echo "取得: 成功 $copied / 見送り $skipped"
 
